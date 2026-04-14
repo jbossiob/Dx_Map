@@ -11,9 +11,10 @@ st.title("📊 Demanda según diagnósticos - Perú")
 # 2. CARGAR DATOS
 @st.cache_data
 def load_data():
+    # Lee el archivo datos.csv que ahora incluye la columna IPRESS
     df = pd.read_csv("datos.csv")
     
-    # Limpieza profunda de nombres geográficos
+    # Limpieza profunda de nombres geográficos para el match con el GeoJSON
     if 'DEPARTAMENTO' in df.columns:
         df['DEPARTAMENTO_GEO'] = df['DEPARTAMENTO'].astype(str).str.upper()
         df['DEPARTAMENTO_GEO'] = df['DEPARTAMENTO_GEO'].str.replace(', PERU', '', regex=False).str.strip()
@@ -72,26 +73,24 @@ cat_sel = st.selectbox("Cat. Terapéutica:", lista_cat, key='cat')
 if cat_sel != "Todas":
     df_filtrado = df_filtrado[df_filtrado['Cat_terapeutica'] == cat_sel]
 
-# Filtro 4: Departamento (Controlador del Zoom)
+# Filtro 4: Departamento (Controlador del Zoom y Filtro de Tabla)
 deps_en_data = sorted(df_filtrado['DEPARTAMENTO_GEO'].unique().tolist())
 dep_sel = st.selectbox("Región (Filtra mapa y tabla):", ["Todas"] + deps_en_data, key='dep')
 
 # Aplicar el filtro de departamento a los datos finales
 if dep_sel != "Todas":
     df_final = df_filtrado[df_filtrado['DEPARTAMENTO_GEO'] == dep_sel]
-    nivel_zoom = 5.0  # Zoom más cercano
+    nivel_zoom = 5.0 
 else:
     df_final = df_filtrado
-    nivel_zoom = 3.5  # Zoom general de todo el Perú
+    nivel_zoom = 3.5 
 
-# 4. PREPARAR DATOS MAPA
+# 4. PREPARAR DATOS MAPA (PROMEDIO POR DEPARTAMENTO)
 df_mapa = df_final.groupby('DEPARTAMENTO_GEO', as_index=False)['Prom_atendidos'].mean()
 df_mapa['Prom_atendidos'] = df_mapa['Prom_atendidos'].round(1)
 
 # 5. DIBUJAR EL MAPA DE COROPLETAS
 st.markdown("---")
-
-# Escala de colores Roche
 escala_roche = ["#E6EFFF", "#0B41CD"]
 
 fig = px.choropleth_mapbox(
@@ -116,13 +115,20 @@ fig.update_layout(
 
 st.plotly_chart(fig, use_container_width=True)
 
-# 6. TABLA DE DETALLE
+# 6. TABLA DE DETALLE POR IPRESS (GRANULARIDAD MÁXIMA)
 st.markdown("---")
-st.markdown("**🏥 Detalle por Provincia**")
+st.markdown("**🏥 Detalle de Atención por IPRESS**")
 
 if not df_final.empty:
-    cols_ver = ['PROVINCIA', 'Producto', 'Cat_terapeutica', 'Prom_atendidos']
-    df_tabla = df_final[cols_ver].sort_values(by='Prom_atendidos', ascending=False)
+    # Agrupamos para asegurar que 'Prom_atendidos' sea el promedio si hay filas repetidas
+    # Columnas solicitadas: Departamento | Provincia | IPRESS | Diagnóstico | Prom_atendidos
+    cols_agrupar = ['DEPARTAMENTO_GEO', 'PROVINCIA', 'IPRESS', 'Diagnóstico']
+    
+    df_tabla = df_final.groupby(cols_agrupar, as_index=False)['Prom_atendidos'].mean()
+    df_tabla = df_tabla.sort_values(by='Prom_atendidos', ascending=False)
+    
+    # Renombrar para que se vea estético en la tabla
+    df_tabla.columns = ['Departamento', 'Provincia', 'IPRESS', 'Diagnóstico', 'Prom_atendidos']
     
     st.dataframe(
         df_tabla.style.format({'Prom_atendidos': '{:.1f}'}), 
