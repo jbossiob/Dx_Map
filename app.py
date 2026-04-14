@@ -106,27 +106,56 @@ fig.update_layout(
 
 st.plotly_chart(fig, use_container_width=True)
 
-# 6. TABLA DE DETALLE POR IPRESS (Cálculo exacto de Promedio)
+# 6. ANÁLISIS DE IPRESS (REDISEÑO VISUAL)
 st.markdown("---")
-st.markdown("**🏥 Detalle de Atención por IPRESS**")
+st.markdown("**🏥 Análisis de Instituciones (IPRESS)**")
 
 if not df_final.empty:
     cols_agrupar = ['DEPARTAMENTO_GEO', 'PROVINCIA', 'IPRESS', 'Diagnóstico']
-    
-    # Agrupamos y sacamos el promedio
     df_tabla = df_final.groupby(cols_agrupar, as_index=False)['Prom_atendidos'].mean()
-    
-    # Renombrar estético
     df_tabla.rename(columns={'DEPARTAMENTO_GEO': 'Departamento', 'PROVINCIA': 'Provincia'}, inplace=True)
-    
-    # Ordenar
     df_tabla = df_tabla.sort_values(by='Prom_atendidos', ascending=False)
     
-    st.dataframe(
-        df_tabla.style.format({'Prom_atendidos': '{:.1f}'}), 
-        use_container_width=True, 
-        hide_index=True
+    # 6.1 BLOQUES DESTACADOS (TOP 3)
+    st.markdown("🏆 **Top Clínicas / Hospitales**")
+    top3 = df_tabla.head(3)
+    
+    # Creamos columnas para poner los bloques uno al lado del otro (en celular se apilarán bonito)
+    cols = st.columns(len(top3) if len(top3) > 0 else 1)
+    for i, (index, row) in enumerate(top3.iterrows()):
+        with cols[i]:
+            # Usamos st.info para crear una "tarjeta" visual con color
+            st.info(f"**{row['IPRESS']}**\n\n🎯 Promedio: **{row['Prom_atendidos']:.1f}**")
+            
+    # 6.2 GRÁFICO DE BARRAS (TOP 10)
+    st.markdown("📊 **Ranking de Mayor Demanda**")
+    # Tomamos el Top 10 y lo ordenamos al revés para que Plotly ponga el #1 arriba
+    df_top10 = df_tabla.head(10).sort_values(by='Prom_atendidos', ascending=True) 
+    
+    fig_bar = px.bar(
+        df_top10, 
+        x='Prom_atendidos', 
+        y='IPRESS', 
+        orientation='h',
+        color='Prom_atendidos',
+        color_continuous_scale=escala_roche,
+        labels={'Prom_atendidos': 'Pacientes', 'IPRESS': ''}
     )
+    fig_bar.update_layout(
+        margin={"r":0,"t":0,"l":0,"b":0},
+        height=350,
+        showlegend=False,
+        coloraxis_showscale=False # Ocultamos la barra de color para dar más espacio a los nombres
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+    # 6.3 LA TABLA COMPLETA (OCULTA EN UN ACORDEÓN)
+    with st.expander("📋 Ver base de datos completa de IPRESS"):
+        st.dataframe(
+            df_tabla.style.format({'Prom_atendidos': '{:.1f}'}), 
+            use_container_width=True, 
+            hide_index=True
+        )
 else:
     st.info("No hay datos para esta combinación de filtros.")
 
