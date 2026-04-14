@@ -6,7 +6,7 @@ import requests
 # 1. CONFIGURACIÓN MOBILE-FIRST
 st.set_page_config(page_title="Roche BI", layout="centered")
 
-st.title("📊 Demanda según diagnósticos - Perú")
+st.title("📊 Demanda potencial según diagnósticos - Perú")
 
 # 2. CARGAR DATOS
 @st.cache_data
@@ -146,4 +146,4 @@ else:
 
 # 7. PIE DE PÁGINA
 st.markdown("---")
-st.caption("Fuente: Datos Abiertos - SuSalud")
+st.caption("Fuente: Datos Abiertos - SuSalud. año 2025")
