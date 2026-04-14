@@ -6,7 +6,6 @@ import requests
 # 1. CONFIGURACIÓN MOBILE-FIRST
 st.set_page_config(page_title="Roche BI", layout="centered")
 
-# Nuevo título
 st.title("📊 Demanda según diagnósticos - Perú")
 
 # 2. CARGAR DATOS
@@ -33,35 +32,54 @@ def load_geojson():
 df = load_data()
 peru_geo = load_geojson()
 
+# --- INICIALIZAR MEMORIA DE FILTROS ---
+if 'diag' not in st.session_state: st.session_state.diag = "Todos"
+if 'prod' not in st.session_state: st.session_state.prod = "Todos"
+if 'cat' not in st.session_state: st.session_state.cat = "Todas"
+if 'dep' not in st.session_state: st.session_state.dep = "Todas"
+
+def limpiar_filtros():
+    st.session_state.diag = "Todos"
+    st.session_state.prod = "Todos"
+    st.session_state.cat = "Todas"
+    st.session_state.dep = "Todas"
+
 # 3. FILTROS EN PANTALLA PRINCIPAL
-st.markdown("### 🔍 Filtros")
+col1, col2 = st.columns([0.7, 0.3])
+with col1:
+    st.markdown("### 🔍 Filtros")
+with col2:
+    st.button("🔄 Limpiar", on_click=limpiar_filtros, use_container_width=True)
 
-# Filtro 1: Diagnóstico (Obligatorio)
-lista_diagnosticos = df['Diagnóstico'].dropna().unique().tolist()
-diag_sel = st.selectbox("Diagnóstico:", lista_diagnosticos)
+# Filtro 1: Diagnóstico
+lista_diagnosticos = ["Todos"] + sorted(df['Diagnóstico'].dropna().unique().tolist())
+diag_sel = st.selectbox("Diagnóstico:", lista_diagnosticos, key='diag')
 
-df_filtrado = df[df['Diagnóstico'] == diag_sel]
+if diag_sel != "Todos":
+    df_filtrado = df[df['Diagnóstico'] == diag_sel]
+else:
+    df_filtrado = df.copy()
 
 # Filtro 2: Producto
 lista_productos = ["Todos"] + sorted(df_filtrado['Producto'].dropna().unique().tolist())
-prod_sel = st.selectbox("Producto:", lista_productos)
+prod_sel = st.selectbox("Producto:", lista_productos, key='prod')
 if prod_sel != "Todos":
     df_filtrado = df_filtrado[df_filtrado['Producto'] == prod_sel]
 
 # Filtro 3: Categoría Terapéutica
 lista_cat = ["Todas"] + sorted(df_filtrado['Cat_terapeutica'].dropna().unique().tolist())
-cat_sel = st.selectbox("Cat. Terapéutica:", lista_cat)
+cat_sel = st.selectbox("Cat. Terapéutica:", lista_cat, key='cat')
 if cat_sel != "Todas":
     df_filtrado = df_filtrado[df_filtrado['Cat_terapeutica'] == cat_sel]
 
-# Filtro 4: Departamento (Controlador del Zoom y la Tabla)
+# Filtro 4: Departamento (Controlador del Zoom)
 deps_en_data = sorted(df_filtrado['DEPARTAMENTO_GEO'].unique().tolist())
-dep_sel = st.selectbox("Región (Filtra mapa y tabla):", ["Todas"] + deps_en_data)
+dep_sel = st.selectbox("Región (Filtra mapa y tabla):", ["Todas"] + deps_en_data, key='dep')
 
 # Aplicar el filtro de departamento a los datos finales
 if dep_sel != "Todas":
     df_final = df_filtrado[df_filtrado['DEPARTAMENTO_GEO'] == dep_sel]
-    nivel_zoom = 5.0  # Zoom más cercano si hay un departamento seleccionado
+    nivel_zoom = 5.0  # Zoom más cercano
 else:
     df_final = df_filtrado
     nivel_zoom = 3.5  # Zoom general de todo el Perú
@@ -73,7 +91,7 @@ df_mapa['Prom_atendidos'] = df_mapa['Prom_atendidos'].round(1)
 # 5. DIBUJAR EL MAPA DE COROPLETAS
 st.markdown("---")
 
-# Escala de colores personalizada (Blanco azulado -> Azul Roche -> Azul Oscuro)
+# Escala de colores Roche
 escala_roche = ["#E6EFFF", "#0B41CD"]
 
 fig = px.choropleth_mapbox(
@@ -84,7 +102,7 @@ fig = px.choropleth_mapbox(
     color='Prom_atendidos',
     color_continuous_scale=escala_roche, 
     mapbox_style="carto-positron",
-    zoom=nivel_zoom, # Aquí aplicamos el zoom dinámico
+    zoom=nivel_zoom, 
     center={"lat": -9.18, "lon": -75.01}, 
     opacity=0.8,
     labels={'Prom_atendidos': 'Promedio'}
@@ -98,11 +116,10 @@ fig.update_layout(
 
 st.plotly_chart(fig, use_container_width=True)
 
-# 6. TABLA DE DETALLE (PROVINCIAS)
+# 6. TABLA DE DETALLE
 st.markdown("---")
 st.markdown("**🏥 Detalle por Provincia**")
 
-# Mostramos la tabla si hay datos
 if not df_final.empty:
     cols_ver = ['PROVINCIA', 'Producto', 'Cat_terapeutica', 'Prom_atendidos']
     df_tabla = df_final[cols_ver].sort_values(by='Prom_atendidos', ascending=False)
