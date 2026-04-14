@@ -6,15 +6,13 @@ import requests
 # 1. CONFIGURACIÓN MOBILE-FIRST
 st.set_page_config(page_title="Roche BI", layout="centered")
 
-st.title("📊 Demanda potencial según diagnósticos - Perú")
+st.title("📊 Demanda según diagnósticos - Perú")
 
 # 2. CARGAR DATOS
 @st.cache_data
 def load_data():
-    # Lee el archivo datos.csv que ahora incluye la columna IPRESS
     df = pd.read_csv("datos.csv")
     
-    # Limpieza profunda de nombres geográficos para el match con el GeoJSON
     if 'DEPARTAMENTO' in df.columns:
         df['DEPARTAMENTO_GEO'] = df['DEPARTAMENTO'].astype(str).str.upper()
         df['DEPARTAMENTO_GEO'] = df['DEPARTAMENTO_GEO'].str.replace(', PERU', '', regex=False).str.strip()
@@ -34,58 +32,51 @@ df = load_data()
 peru_geo = load_geojson()
 
 # --- INICIALIZAR MEMORIA DE FILTROS ---
-if 'diag' not in st.session_state: st.session_state.diag = "Todos"
-if 'prod' not in st.session_state: st.session_state.prod = "Todos"
 if 'cat' not in st.session_state: st.session_state.cat = "Todas"
+if 'prod' not in st.session_state: st.session_state.prod = "Todos"
+if 'diag' not in st.session_state: st.session_state.diag = "Todos"
 if 'dep' not in st.session_state: st.session_state.dep = "Todas"
 
 def limpiar_filtros():
-    st.session_state.diag = "Todos"
-    st.session_state.prod = "Todos"
     st.session_state.cat = "Todas"
+    st.session_state.prod = "Todos"
+    st.session_state.diag = "Todos"
     st.session_state.dep = "Todas"
 
-# 3. FILTROS EN PANTALLA PRINCIPAL
+# 3. FILTROS EN CASCADA (Pantalla Principal)
 col1, col2 = st.columns([0.7, 0.3])
 with col1:
     st.markdown("### 🔍 Filtros")
 with col2:
     st.button("🔄 Limpiar", on_click=limpiar_filtros, use_container_width=True)
 
-# Filtro 1: Diagnóstico
-lista_diagnosticos = ["Todos"] + sorted(df['Diagnóstico'].dropna().unique().tolist())
-diag_sel = st.selectbox("Diagnóstico:", lista_diagnosticos, key='diag')
-
-if diag_sel != "Todos":
-    df_filtrado = df[df['Diagnóstico'] == diag_sel]
-else:
-    df_filtrado = df.copy()
-
-# Filtro 2: Producto
-lista_productos = ["Todos"] + sorted(df_filtrado['Producto'].dropna().unique().tolist())
-prod_sel = st.selectbox("Producto:", lista_productos, key='prod')
-if prod_sel != "Todos":
-    df_filtrado = df_filtrado[df_filtrado['Producto'] == prod_sel]
-
-# Filtro 3: Categoría Terapéutica
-lista_cat = ["Todas"] + sorted(df_filtrado['Cat_terapeutica'].dropna().unique().tolist())
+# Nivel 1: Categoría Terapéutica
+lista_cat = ["Todas"] + sorted(df['Cat_terapeutica'].dropna().unique().tolist())
 cat_sel = st.selectbox("Cat. Terapéutica:", lista_cat, key='cat')
-if cat_sel != "Todas":
-    df_filtrado = df_filtrado[df_filtrado['Cat_terapeutica'] == cat_sel]
+df_f1 = df[df['Cat_terapeutica'] == cat_sel] if cat_sel != "Todas" else df.copy()
 
-# Filtro 4: Departamento (Controlador del Zoom y Filtro de Tabla)
-deps_en_data = sorted(df_filtrado['DEPARTAMENTO_GEO'].unique().tolist())
+# Nivel 2: Producto (Depende de Categoría)
+lista_productos = ["Todos"] + sorted(df_f1['Producto'].dropna().unique().tolist())
+prod_sel = st.selectbox("Producto:", lista_productos, key='prod')
+df_f2 = df_f1[df_f1['Producto'] == prod_sel] if prod_sel != "Todos" else df_f1
+
+# Nivel 3: Diagnóstico (Depende de Producto y Categoría)
+lista_diagnosticos = ["Todos"] + sorted(df_f2['Diagnóstico'].dropna().unique().tolist())
+diag_sel = st.selectbox("Diagnóstico:", lista_diagnosticos, key='diag')
+df_f3 = df_f2[df_f2['Diagnóstico'] == diag_sel] if diag_sel != "Todos" else df_f2
+
+# Nivel 4: Departamento (Depende de todo lo anterior)
+deps_en_data = sorted(df_f3['DEPARTAMENTO_GEO'].dropna().unique().tolist())
 dep_sel = st.selectbox("Región (Filtra mapa y tabla):", ["Todas"] + deps_en_data, key='dep')
 
-# Aplicar el filtro de departamento a los datos finales
 if dep_sel != "Todas":
-    df_final = df_filtrado[df_filtrado['DEPARTAMENTO_GEO'] == dep_sel]
+    df_final = df_f3[df_f3['DEPARTAMENTO_GEO'] == dep_sel]
     nivel_zoom = 5.0 
 else:
-    df_final = df_filtrado
+    df_final = df_f3
     nivel_zoom = 3.5 
 
-# 4. PREPARAR DATOS MAPA (PROMEDIO POR DEPARTAMENTO)
+# 4. PREPARAR DATOS MAPA
 df_mapa = df_final.groupby('DEPARTAMENTO_GEO', as_index=False)['Prom_atendidos'].mean()
 df_mapa['Prom_atendidos'] = df_mapa['Prom_atendidos'].round(1)
 
@@ -115,27 +106,22 @@ fig.update_layout(
 
 st.plotly_chart(fig, use_container_width=True)
 
-# 6. TABLA DE DETALLE POR IPRESS (GRANULARIDAD MÁXIMA)
+# 6. TABLA DE DETALLE POR IPRESS (Cálculo exacto de Promedio)
 st.markdown("---")
 st.markdown("**🏥 Detalle de Atención por IPRESS**")
 
 if not df_final.empty:
-    # 1. Definimos las columnas que se van a mantener (SIN Producto)
     cols_agrupar = ['DEPARTAMENTO_GEO', 'PROVINCIA', 'IPRESS', 'Diagnóstico']
     
-    # 2. Agrupamos y forzamos el cálculo del PROMEDIO (mean)
+    # Agrupamos y sacamos el promedio
     df_tabla = df_final.groupby(cols_agrupar, as_index=False)['Prom_atendidos'].mean()
     
-    # 3. Renombramos para que se vea estético
-    df_tabla.rename(columns={
-        'DEPARTAMENTO_GEO': 'Departamento', 
-        'PROVINCIA': 'Provincia'
-    }, inplace=True)
+    # Renombrar estético
+    df_tabla.rename(columns={'DEPARTAMENTO_GEO': 'Departamento', 'PROVINCIA': 'Provincia'}, inplace=True)
     
-    # 4. Ordenamos de mayor a menor según el promedio
+    # Ordenar
     df_tabla = df_tabla.sort_values(by='Prom_atendidos', ascending=False)
     
-    # 5. Mostramos la tabla
     st.dataframe(
         df_tabla.style.format({'Prom_atendidos': '{:.1f}'}), 
         use_container_width=True, 
@@ -146,4 +132,4 @@ else:
 
 # 7. PIE DE PÁGINA
 st.markdown("---")
-st.caption("Fuente: Datos Abiertos - SuSalud. año 2025")
+st.caption("Fuente: Datos Abiertos - SuSalud")
