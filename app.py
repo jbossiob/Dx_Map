@@ -120,19 +120,22 @@ st.markdown("---")
 st.markdown("**🏥 Detalle de Atención por IPRESS**")
 
 if not df_final.empty:
-    # ⚠️ CAMBIO CLAVE: Ya no agrupamos ni calculamos promedios nuevos. 
-    # Mostramos las filas puras de tu CSV para que los números cuadren al 100%
-    cols_ver = ['DEPARTAMENTO_GEO', 'PROVINCIA', 'IPRESS', 'Diagnóstico', 'Prom_atendidos']
+    # 1. Definimos las columnas que se van a mantener (SIN Producto)
+    cols_agrupar = ['DEPARTAMENTO_GEO', 'PROVINCIA', 'IPRESS', 'Diagnóstico']
     
-    # Copiamos para no afectar el dataframe original
-    df_tabla = df_final[cols_ver].copy()
+    # 2. Agrupamos y forzamos el cálculo del PROMEDIO (mean)
+    df_tabla = df_final.groupby(cols_agrupar, as_index=False)['Prom_atendidos'].mean()
     
-    # Renombramos para que se vea estético
-    df_tabla.rename(columns={'DEPARTAMENTO_GEO': 'Departamento', 'PROVINCIA': 'Provincia'}, inplace=True)
+    # 3. Renombramos para que se vea estético
+    df_tabla.rename(columns={
+        'DEPARTAMENTO_GEO': 'Departamento', 
+        'PROVINCIA': 'Provincia'
+    }, inplace=True)
     
-    # Ordenamos de mayor a menor según el promedio de atendidos
+    # 4. Ordenamos de mayor a menor según el promedio
     df_tabla = df_tabla.sort_values(by='Prom_atendidos', ascending=False)
     
+    # 5. Mostramos la tabla
     st.dataframe(
         df_tabla.style.format({'Prom_atendidos': '{:.1f}'}), 
         use_container_width=True, 
