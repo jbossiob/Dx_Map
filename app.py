@@ -6,20 +6,19 @@ import requests
 # 1. CONFIGURACIÓN MOBILE-FIRST
 st.set_page_config(page_title="Roche BI", layout="centered")
 
-st.title("📊 BI Roche - Panorama")
+# Nuevo título
+st.title("📊 Demanda según diagnósticos - Perú")
 
 # 2. CARGAR DATOS
 @st.cache_data
 def load_data():
     df = pd.read_csv("datos.csv")
     
-    # --- LIMPIEZA PROFUNDA DE NOMBRES ---
-    # Pasamos a mayúsculas, quitamos ", PERU" y borramos espacios fantasmas
+    # Limpieza profunda de nombres geográficos
     if 'DEPARTAMENTO' in df.columns:
         df['DEPARTAMENTO_GEO'] = df['DEPARTAMENTO'].astype(str).str.upper()
         df['DEPARTAMENTO_GEO'] = df['DEPARTAMENTO_GEO'].str.replace(', PERU', '', regex=False).str.strip()
         
-        # Correcciones específicas de tildes que suelen fallar en GeoJSON
         dic_acentos = {'ÁN': 'AN', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'JUNÍN': 'JUNIN'}
         for con, sin in dic_acentos.items():
             df['DEPARTAMENTO_GEO'] = df['DEPARTAMENTO_GEO'].str.replace(con, sin)
@@ -28,7 +27,6 @@ def load_data():
 
 @st.cache_data
 def load_geojson():
-    # GeoJSON estándar de departamentos de Perú
     url_geo = "https://raw.githubusercontent.com/juaneladio/peru-geojson/master/peru_departamental_simple.geojson"
     return requests.get(url_geo).json()
 
@@ -36,31 +34,57 @@ df = load_data()
 peru_geo = load_geojson()
 
 # 3. FILTROS EN PANTALLA PRINCIPAL
-st.markdown("### 🔍 Selección de Diagnóstico")
-lista_diagnosticos = df['Diagnóstico'].dropna().unique().tolist()
-diag_sel = st.selectbox("Busque o seleccione:", lista_diagnosticos)
+st.markdown("### 🔍 Filtros")
 
-# Filtrar datos
+# Filtro 1: Diagnóstico (Obligatorio)
+lista_diagnosticos = df['Diagnóstico'].dropna().unique().tolist()
+diag_sel = st.selectbox("Diagnóstico:", lista_diagnosticos)
+
 df_filtrado = df[df['Diagnóstico'] == diag_sel]
 
-# 4. PREPARAR DATOS MAPA (Agrupamos Provincias -> Departamento)
-df_mapa = df_filtrado.groupby('DEPARTAMENTO_GEO', as_index=False)['Prom_atendidos'].mean()
+# Filtro 2: Producto
+lista_productos = ["Todos"] + sorted(df_filtrado['Producto'].dropna().unique().tolist())
+prod_sel = st.selectbox("Producto:", lista_productos)
+if prod_sel != "Todos":
+    df_filtrado = df_filtrado[df_filtrado['Producto'] == prod_sel]
+
+# Filtro 3: Categoría Terapéutica
+lista_cat = ["Todas"] + sorted(df_filtrado['Cat_terapeutica'].dropna().unique().tolist())
+cat_sel = st.selectbox("Cat. Terapéutica:", lista_cat)
+if cat_sel != "Todas":
+    df_filtrado = df_filtrado[df_filtrado['Cat_terapeutica'] == cat_sel]
+
+# Filtro 4: Departamento (Controlador del Zoom y la Tabla)
+deps_en_data = sorted(df_filtrado['DEPARTAMENTO_GEO'].unique().tolist())
+dep_sel = st.selectbox("Región (Filtra mapa y tabla):", ["Todas"] + deps_en_data)
+
+# Aplicar el filtro de departamento a los datos finales
+if dep_sel != "Todas":
+    df_final = df_filtrado[df_filtrado['DEPARTAMENTO_GEO'] == dep_sel]
+    nivel_zoom = 5.0  # Zoom más cercano si hay un departamento seleccionado
+else:
+    df_final = df_filtrado
+    nivel_zoom = 3.5  # Zoom general de todo el Perú
+
+# 4. PREPARAR DATOS MAPA
+df_mapa = df_final.groupby('DEPARTAMENTO_GEO', as_index=False)['Prom_atendidos'].mean()
 df_mapa['Prom_atendidos'] = df_mapa['Prom_atendidos'].round(1)
 
 # 5. DIBUJAR EL MAPA DE COROPLETAS
 st.markdown("---")
-st.markdown(f"**📍 Promedio Regional: {diag_sel}**")
 
-# IMPORTANTE: featureidkey='properties.NOMBDEP' debe coincidir con el nombre en mayúsculas
+# Escala de colores personalizada (Blanco azulado -> Azul Roche -> Azul Oscuro)
+escala_roche = ["#E6EFFF", "#0B41CD"]
+
 fig = px.choropleth_mapbox(
     df_mapa,
     geojson=peru_geo,
     locations='DEPARTAMENTO_GEO',
     featureidkey='properties.NOMBDEP', 
     color='Prom_atendidos',
-    color_continuous_scale="Reds", 
+    color_continuous_scale=escala_roche, 
     mapbox_style="carto-positron",
-    zoom=3.5, 
+    zoom=nivel_zoom, # Aquí aplicamos el zoom dinámico
     center={"lat": -9.18, "lon": -75.01}, 
     opacity=0.8,
     labels={'Prom_atendidos': 'Promedio'}
@@ -78,21 +102,19 @@ st.plotly_chart(fig, use_container_width=True)
 st.markdown("---")
 st.markdown("**🏥 Detalle por Provincia**")
 
-# Seleccionamos un departamento para ver sus provincias
-deps_en_data = sorted(df_filtrado['DEPARTAMENTO_GEO'].unique().tolist())
-dep_sel = st.selectbox("Toque una región para ver detalle:", ["Ver todas"] + deps_en_data)
-
-if dep_sel != "Ver todas":
-    df_tabla = df_filtrado[df_filtrado['DEPARTAMENTO_GEO'] == dep_sel]
+# Mostramos la tabla si hay datos
+if not df_final.empty:
+    cols_ver = ['PROVINCIA', 'Producto', 'Cat_terapeutica', 'Prom_atendidos']
+    df_tabla = df_final[cols_ver].sort_values(by='Prom_atendidos', ascending=False)
+    
+    st.dataframe(
+        df_tabla.style.format({'Prom_atendidos': '{:.1f}'}), 
+        use_container_width=True, 
+        hide_index=True
+    )
 else:
-    df_tabla = df_filtrado
+    st.info("No hay datos para esta combinación de filtros.")
 
-# Mostramos Provincias y Productos
-cols_ver = ['PROVINCIA', 'Producto', 'Cat_terapeutica', 'Prom_atendidos']
-df_tabla = df_tabla[cols_ver].sort_values(by='Prom_atendidos', ascending=False)
-
-st.dataframe(
-    df_tabla.style.format({'Prom_atendidos': '{:.1f}'}), 
-    use_container_width=True, 
-    hide_index=True
-)
+# 7. PIE DE PÁGINA
+st.markdown("---")
+st.caption("Fuente: Datos Abiertos - SuSalud")
