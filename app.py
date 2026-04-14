@@ -122,7 +122,7 @@ st.markdown("**🏥 Detalle de Atención por IPRESS**")
 if not df_final.empty:
     # ⚠️ CAMBIO CLAVE: Ya no agrupamos ni calculamos promedios nuevos. 
     # Mostramos las filas puras de tu CSV para que los números cuadren al 100%
-    cols_ver = ['DEPARTAMENTO_GEO', 'PROVINCIA', 'IPRESS', 'Diagnóstico', 'Producto', 'Prom_atendidos']
+    cols_ver = ['DEPARTAMENTO_GEO', 'PROVINCIA', 'IPRESS', 'Diagnóstico', 'Prom_atendidos']
     
     # Copiamos para no afectar el dataframe original
     df_tabla = df_final[cols_ver].copy()
