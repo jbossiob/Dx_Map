@@ -10,9 +10,8 @@ st.title("📊 Panorama Competitivo - Roche Perú")
 # 2. CARGAR DATOS (Caché para que sea rapidísimo)
 @st.cache_data
 def load_data():
-    # Reemplaza esta URL por el link de "Publicar en la web (.csv)" de tu Google Sheet
-    url_sheet_csv = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJxM5ethoBsASlWncr47R6jEgNmdODWZKswQLePOpc0R2Q4Qy-qrqcEWSlLkwyqBPboiEdta_tMnbd/pub?gid=0&single=true&output=csv" 
-    df = pd.read_csv(url_sheet_csv)
+    # Ahora lee el archivo CSV local en lugar de internet
+    df = pd.read_csv("datos.csv")
     return df
 
 @st.cache_data
