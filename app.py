@@ -41,24 +41,29 @@ if 'cat' not in st.session_state: st.session_state.cat = "Todas"
 if 'prod' not in st.session_state: st.session_state.prod = "Todos"
 if 'diag' not in st.session_state: st.session_state.diag = "Todos"
 if 'dep' not in st.session_state: st.session_state.dep = "Todas"
-if 'no_lima' not in st.session_state: st.session_state.no_lima = False
+if 'excluir_lima' not in st.session_state: st.session_state.excluir_lima = False
 
 def limpiar_filtros():
     st.session_state.cat = "Todas"
     st.session_state.prod = "Todos"
     st.session_state.diag = "Todos"
     st.session_state.dep = "Todas"
-    st.session_state.no_lima = False
+    st.session_state.excluir_lima = False
 
-# 3. FILTROS EN CASCADA
-col1, col2 = st.columns([0.7, 0.3])
-with col1:
-    st.markdown("### 🔍 Filtros")
-with col2:
-    st.button("🔄 Limpiar", on_click=limpiar_filtros, use_container_width=True)
+# 3. FILTROS Y BOTONES DE CONTROL
+st.markdown("### 🔍 Panel de Control")
 
-# BOTÓN ESPECIAL PARA EXCLUIR LIMA
-excluir_lima = st.toggle("🚫 Excluir Lima (para comparar regiones)", key='no_lima')
+col_btn1, col_btn2 = st.columns(2)
+
+with col_btn1:
+    # BOTÓN DINÁMICO PARA LIMA
+    label_lima = "✅ Incluir Lima" if st.session_state.excluir_lima else "🚫 Excluir Lima"
+    if st.button(label_lima, use_container_width=True):
+        st.session_state.excluir_lima = not st.session_state.excluir_lima
+        st.rerun()
+
+with col_btn2:
+    st.button("🔄 Limpiar Filtros", on_click=limpiar_filtros, use_container_width=True)
 
 # Lógica de filtrado en cascada
 # Nivel 1: Categoría
@@ -76,9 +81,10 @@ lista_diagnosticos = ["Todos"] + sorted(df_f2['Diagnóstico'].dropna().unique().
 diag_sel = st.selectbox("Diagnóstico:", lista_diagnosticos, key='diag')
 df_f3 = df_f2[df_f2['Diagnóstico'] == diag_sel] if diag_sel != "Todos" else df_f2
 
-# APLICAR EXCLUSIÓN DE LIMA SI ESTÁ ACTIVA
-if excluir_lima:
+# APLICAR EXCLUSIÓN DE LIMA SI EL BOTÓN FUE PRESIONADO
+if st.session_state.excluir_lima:
     df_f3 = df_f3[df_f3['DEPARTAMENTO_GEO'] != 'LIMA']
+    st.warning("⚠️ Lima ha sido excluida del análisis para resaltar las provincias.")
 
 # Nivel 4: Departamento
 deps_en_data = sorted(df_f3['DEPARTAMENTO_GEO'].dropna().unique().tolist())
