@@ -13,6 +13,13 @@ st.title("📊 Demanda según diagnósticos - Perú")
 def load_data():
     df = pd.read_csv("datos.csv")
     
+    # --- CORRECCIÓN DE TIPO DE DATO ---
+    # Forzamos a que Prom_atendidos sea número (quitando posibles comas de miles)
+    if 'Prom_atendidos' in df.columns:
+        df['Prom_atendidos'] = df['Prom_atendidos'].astype(str).str.replace(',', '', regex=False)
+        df['Prom_atendidos'] = pd.to_numeric(df['Prom_atendidos'], errors='coerce')
+        
+    # Limpieza profunda de nombres geográficos
     if 'DEPARTAMENTO' in df.columns:
         df['DEPARTAMENTO_GEO'] = df['DEPARTAMENTO'].astype(str).str.upper()
         df['DEPARTAMENTO_GEO'] = df['DEPARTAMENTO_GEO'].str.replace(', PERU', '', regex=False).str.strip()
