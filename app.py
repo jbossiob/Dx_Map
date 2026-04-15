@@ -56,8 +56,8 @@ st.markdown("### 🔍 Panel de Control")
 col_btn1, col_btn2 = st.columns(2)
 
 with col_btn1:
-    # BOTÓN DINÁMICO PARA LIMA
-    label_lima = "✅ Incluir Lima" if st.session_state.excluir_lima else "🚫 Excluir Lima"
+    # BOTÓN DINÁMICO PARA LIMA Y CALLAO
+    label_lima = "✅ Incluir Lima y Callao" if st.session_state.excluir_lima else "🚫 Excluir Lima y Callao"
     if st.button(label_lima, use_container_width=True):
         st.session_state.excluir_lima = not st.session_state.excluir_lima
         st.rerun()
@@ -81,10 +81,11 @@ lista_diagnosticos = ["Todos"] + sorted(df_f2['Diagnóstico'].dropna().unique().
 diag_sel = st.selectbox("Diagnóstico:", lista_diagnosticos, key='diag')
 df_f3 = df_f2[df_f2['Diagnóstico'] == diag_sel] if diag_sel != "Todos" else df_f2
 
-# APLICAR EXCLUSIÓN DE LIMA SI EL BOTÓN FUE PRESIONADO
+# APLICAR EXCLUSIÓN DE LIMA Y CALLAO SI EL BOTÓN FUE PRESIONADO
 if st.session_state.excluir_lima:
-    df_f3 = df_f3[df_f3['DEPARTAMENTO_GEO'] != 'LIMA']
-    st.warning("⚠️ Lima ha sido excluida del análisis para resaltar las provincias.")
+    # Usamos ~ (NOT) y .isin() para excluir múltiples valores de una vez
+    df_f3 = df_f3[~df_f3['DEPARTAMENTO_GEO'].isin(['LIMA', 'CALLAO'])]
+    st.warning("⚠️ Lima y Callao han sido excluidos del análisis para resaltar las provincias.")
 
 # Nivel 4: Departamento
 deps_en_data = sorted(df_f3['DEPARTAMENTO_GEO'].dropna().unique().tolist())
