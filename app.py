@@ -83,9 +83,11 @@ else:
     df_final = df_f3
     nivel_zoom = 3.5 
 
-# 4. PREPARAR DATOS MAPA
-df_mapa = df_final.groupby('DEPARTAMENTO_GEO', as_index=False)['Prom_atendidos'].mean()
-df_mapa['Prom_atendidos'] = df_mapa['Prom_atendidos'].round(1)
+# 4. PREPARAR DATOS MAPA (SUMA TOTAL DEL PERIODO)
+df_mapa = df_final.groupby('DEPARTAMENTO_GEO', as_index=False)['Prom_atendidos'].sum()
+# Renombramos la columna para que tenga sentido visualmente
+df_mapa.rename(columns={'Prom_atendidos': 'Total_Atendidos'}, inplace=True)
+df_mapa['Total_Atendidos'] = df_mapa['Total_Atendidos'].round(0)
 
 # 5. DIBUJAR EL MAPA DE COROPLETAS
 st.markdown("---")
@@ -96,70 +98,76 @@ fig = px.choropleth_mapbox(
     geojson=peru_geo,
     locations='DEPARTAMENTO_GEO',
     featureidkey='properties.NOMBDEP', 
-    color='Prom_atendidos',
+    color='Total_Atendidos',
     color_continuous_scale=escala_roche, 
     mapbox_style="carto-positron",
     zoom=nivel_zoom, 
     center={"lat": -9.18, "lon": -75.01}, 
     opacity=0.8,
-    labels={'Prom_atendidos': 'Promedio'}
+    labels={'Total_Atendidos': 'Volumen Total'}
 )
 
 fig.update_layout(
     margin={"r":0,"t":0,"l":0,"b":0},
     height=400, 
-    coloraxis_colorbar=dict(title="Prom", thickness=10)
+    coloraxis_colorbar=dict(title="Total", thickness=10)
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
-# 6. ANÁLISIS DE IPRESS (REDISEÑO VISUAL)
+# 6. ANÁLISIS DE IPRESS (SUMA TOTAL DEL PERIODO)
 st.markdown("---")
 st.markdown("**🏥 Análisis de Instituciones (IPRESS)**")
 
 if not df_final.empty:
     cols_agrupar = ['DEPARTAMENTO_GEO', 'PROVINCIA', 'IPRESS', 'Diagnóstico']
-    df_tabla = df_final.groupby(cols_agrupar, as_index=False)['Prom_atendidos'].mean()
-    df_tabla.rename(columns={'DEPARTAMENTO_GEO': 'Departamento', 'PROVINCIA': 'Provincia'}, inplace=True)
-    df_tabla = df_tabla.sort_values(by='Prom_atendidos', ascending=False)
+    # Aquí está la corrección principal: usamos .sum()
+    df_tabla = df_final.groupby(cols_agrupar, as_index=False)['Prom_atendidos'].sum()
+    
+    # Renombramos columnas para la vista final
+    df_tabla.rename(columns={
+        'DEPARTAMENTO_GEO': 'Departamento', 
+        'PROVINCIA': 'Provincia',
+        'Prom_atendidos': 'Total_Atendidos'
+    }, inplace=True)
+    
+    df_tabla = df_tabla.sort_values(by='Total_Atendidos', ascending=False)
     
     # 6.1 BLOQUES DESTACADOS (TOP 3)
-    st.markdown("🏆 **Top Clínicas / Hospitales**")
+    st.markdown("🏆 **Top Clínicas / Hospitales (Volumen Anual)**")
     top3 = df_tabla.head(3)
     
-    # Creamos columnas para poner los bloques uno al lado del otro (en celular se apilarán bonito)
     cols = st.columns(len(top3) if len(top3) > 0 else 1)
     for i, (index, row) in enumerate(top3.iterrows()):
         with cols[i]:
-            # Usamos st.info para crear una "tarjeta" visual con color
-            st.info(f"**{row['IPRESS']}**\n\n🎯 Promedio: **{row['Prom_atendidos']:.1f}**")
+            st.info(f"**{row['IPRESS']}**\n\n🎯 Total Pacientes: **{int(row['Total_Atendidos'])}**")
             
     # 6.2 GRÁFICO DE BARRAS (TOP 10)
     st.markdown("📊 **Ranking de Mayor Demanda**")
-    # Tomamos el Top 10 y lo ordenamos al revés para que Plotly ponga el #1 arriba
-    df_top10 = df_tabla.head(10).sort_values(by='Prom_atendidos', ascending=True) 
+    df_top10 = df_tabla.head(10).sort_values(by='Total_Atendidos', ascending=True) 
     
     fig_bar = px.bar(
         df_top10, 
-        x='Prom_atendidos', 
+        x='Total_Atendidos', 
         y='IPRESS', 
         orientation='h',
-        color='Prom_atendidos',
+        color='Total_Atendidos',
         color_continuous_scale=escala_roche,
-        labels={'Prom_atendidos': 'Pacientes', 'IPRESS': ''}
+        labels={'Total_Atendidos': 'Total Pacientes', 'IPRESS': ''}
     )
     fig_bar.update_layout(
         margin={"r":0,"t":0,"l":0,"b":0},
         height=350,
         showlegend=False,
-        coloraxis_showscale=False # Ocultamos la barra de color para dar más espacio a los nombres
+        coloraxis_showscale=False
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
     # 6.3 LA TABLA COMPLETA (OCULTA EN UN ACORDEÓN)
     with st.expander("📋 Ver base de datos completa de IPRESS"):
+        # Mostramos los números enteros sin decimales porque son personas reales
         st.dataframe(
-            df_tabla.style.format({'Prom_atendidos': '{:.1f}'}), 
+            df_tabla.style.format({'Total_Atendidos': '{:,.0f}'}), 
             use_container_width=True, 
             hide_index=True
         )
