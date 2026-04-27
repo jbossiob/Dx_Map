@@ -203,5 +203,7 @@ else:
 
 # 7. PIE DE PÁGINA
 st.markdown("---")
-st.caption("Fuente: Datos Abiertos - SuSalud <br> Consulta B2 - Morbilidad en Consulta Ambulatoria: Esta tabla nos muestra el Reporte Consolidado de Morbilidad en Consulta Ambulatoria. Nos muestra los diagnósticos definitivos segun CIE 10 de los pacientes de una IPRESS en un mes determinado
-</br>")
+st.caption("""
+**Fuente:** Datos Abiertos - SuSalud  
+**Consulta B2 - Morbilidad en Consulta Ambulatoria:** Esta tabla nos muestra el Reporte Consolidado de Morbilidad en Consulta Ambulatoria. Nos muestra los diagnósticos definitivos según CIE 10 de los pacientes de una IPRESS en un mes determinado.
+""")
