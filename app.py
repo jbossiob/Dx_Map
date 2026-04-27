@@ -37,6 +37,9 @@ df = load_data()
 peru_geo = load_geojson()
 
 # --- INICIALIZAR MEMORIA DE FILTROS ---
+# (Se añadieron sector y categoria_inst)
+if 'sector' not in st.session_state: st.session_state.sector = "Todos"
+if 'categoria_inst' not in st.session_state: st.session_state.categoria_inst = "Todas"
 if 'cat' not in st.session_state: st.session_state.cat = "Todas"
 if 'prod' not in st.session_state: st.session_state.prod = "Todos"
 if 'diag' not in st.session_state: st.session_state.diag = "Todos"
@@ -44,6 +47,8 @@ if 'dep' not in st.session_state: st.session_state.dep = "Todas"
 if 'excluir_lima' not in st.session_state: st.session_state.excluir_lima = False
 
 def limpiar_filtros():
+    st.session_state.sector = "Todos"
+    st.session_state.categoria_inst = "Todas"
     st.session_state.cat = "Todas"
     st.session_state.prod = "Todos"
     st.session_state.diag = "Todos"
@@ -65,11 +70,23 @@ with col_btn1:
 with col_btn2:
     st.button("🔄 Limpiar Filtros", on_click=limpiar_filtros, use_container_width=True)
 
-# Lógica de filtrado en cascada
-# Nivel 1: Categoría
-lista_cat = ["Todas"] + sorted(df['Cat_terapeutica'].dropna().unique().tolist())
+# LÓGICA DE FILTRADO EN CASCADA
+# (Hemos agregado los pasos "0.1" y "0.2" para Sector y Categoría de institución)
+
+# Nivel 0.1: Sector (Ej. MINSA, EsSalud, Privado)
+lista_sectores = ["Todos"] + sorted(df['SECTOR'].dropna().unique().tolist())
+sector_sel = st.selectbox("Sector:", lista_sectores, key='sector')
+df_sec = df[df['SECTOR'] == sector_sel] if sector_sel != "Todos" else df.copy()
+
+# Nivel 0.2: Categoría de IPRESS (Ej. III-1, II-2)
+lista_categorias = ["Todas"] + sorted(df_sec['CATEGORIA'].dropna().unique().tolist())
+cat_inst_sel = st.selectbox("Categoría IPRESS:", lista_categorias, key='categoria_inst')
+df_cat = df_sec[df_sec['CATEGORIA'] == cat_inst_sel] if cat_inst_sel != "Todas" else df_sec
+
+# Nivel 1: Cat. Terapéutica
+lista_cat = ["Todas"] + sorted(df_cat['Cat_terapeutica'].dropna().unique().tolist())
 cat_sel = st.selectbox("Cat. Terapéutica:", lista_cat, key='cat')
-df_f1 = df[df['Cat_terapeutica'] == cat_sel] if cat_sel != "Todas" else df.copy()
+df_f1 = df_cat[df_cat['Cat_terapeutica'] == cat_sel] if cat_sel != "Todas" else df_cat.copy()
 
 # Nivel 2: Producto
 lista_productos = ["Todos"] + sorted(df_f1['Producto'].dropna().unique().tolist())
@@ -81,9 +98,8 @@ lista_diagnosticos = ["Todos"] + sorted(df_f2['Diagnóstico'].dropna().unique().
 diag_sel = st.selectbox("Diagnóstico:", lista_diagnosticos, key='diag')
 df_f3 = df_f2[df_f2['Diagnóstico'] == diag_sel] if diag_sel != "Todos" else df_f2
 
-# APLICAR EXCLUSIÓN DE LIMA Y CALLAO SI EL BOTÓN FUE PRESIONADO
+# APLICAR EXCLUSIÓN DE LIMA Y CALLAO
 if st.session_state.excluir_lima:
-    # Usamos ~ (NOT) y .isin() para excluir múltiples valores de una vez
     df_f3 = df_f3[~df_f3['DEPARTAMENTO_GEO'].isin(['LIMA', 'CALLAO'])]
     st.warning("⚠️ Lima y Callao han sido excluidos del análisis para resaltar las provincias.")
 
@@ -134,11 +150,13 @@ st.markdown("---")
 st.markdown("**🏥 Análisis de Instituciones (IPRESS)**")
 
 if not df_final.empty:
-    cols_agrupar = ['DEPARTAMENTO_GEO', 'PROVINCIA', 'IPRESS', 'Diagnóstico']
+    cols_agrupar = ['DEPARTAMENTO_GEO', 'PROVINCIA', 'SECTOR', 'CATEGORIA', 'IPRESS', 'Diagnóstico']
     df_tabla = df_final.groupby(cols_agrupar, as_index=False)['Prom_atendidos'].sum()
     df_tabla.rename(columns={
         'DEPARTAMENTO_GEO': 'Departamento', 
         'PROVINCIA': 'Provincia',
+        'SECTOR': 'Sector',
+        'CATEGORIA': 'Categoría',
         'Prom_atendidos': 'Prom_Mensual'
     }, inplace=True)
     df_tabla = df_tabla.sort_values(by='Prom_Mensual', ascending=False)
@@ -150,7 +168,7 @@ if not df_final.empty:
     cols = st.columns(len(top3) if len(top3) > 0 else 1)
     for i, (index, row) in enumerate(top3.iterrows()):
         with cols[i]:
-            st.info(f"**{row['IPRESS']}**\n\n🎯 Promedio: **{row['Prom_Mensual']:.1f}**")
+            st.info(f"**{row['IPRESS']}**\n\n📌 {row['Sector']} - {row['Categoría']}\n\n🎯 Promedio: **{row['Prom_Mensual']:.1f}**")
             
     # 6.2 GRÁFICO DE BARRAS
     st.markdown("📊 **Ranking: Promedio de pacientes mensual**")
